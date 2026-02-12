@@ -1,0 +1,73 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    defaults:
+      run:
+        shell: msys2 {0}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up MinGW
+      uses: egor-tensin/setup-mingw@v3
+      with:
+        platform: x64
+    
+    - name: Set up MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: UCRT64
+        update: true
+        install: >-
+          mingw-w64-ucrt-x86_64-cmake
+          mingw-w64-ucrt-x86_64-gcc
+          mingw-w64-ucrt-x86_64-ninja
+          mingw-w64-ucrt-x86_64-libplist
+          mingw-w64-ucrt-x86_64-gstreamer
+          mingw-w64-ucrt-x86_64-gst-plugins-base
+          mingw-w64-ucrt-x86_64-gst-libav
+          mingw-w64-ucrt-x86_64-gst-plugins-good
+          mingw-w64-ucrt-x86_64-gst-plugins-bad
+    
+    - name: Download and setup Bonjour SDK
+      shell: pwsh
+      run: |
+        # Download Bonjour SDK
+        $bonjourUrl = "https://github.com/nelsonjchen/mDNSResponder/releases/download/v2019.05.08.1/bonjoursdksetup.exe"
+        $bonjourInstaller = "$env:TEMP\bonjoursdksetup.exe"
+        Invoke-WebRequest -Uri $bonjourUrl -OutFile $bonjourInstaller
+        
+        # Install Bonjour SDK silently
+        Start-Process -FilePath $bonjourInstaller -ArgumentList "/quiet" -Wait
+        
+        # Verify installation
+        if (Test-Path "C:\Program Files\Bonjour SDK") {
+          Write-Host "Bonjour SDK installed successfully"
+        } else {
+          Write-Error "Bonjour SDK installation failed"
+          exit 1
+        }
+    
+    - name: Build UxPlay
+      run: |
+        mkdir build
+        cd build
+        cmake ..
+        ninja
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: uxplay-windows-x64
+        path: build/uxplay.exe
