@@ -47,13 +47,47 @@ jobs:
     - name: Download and setup Bonjour SDK
       shell: pwsh
       run: |
-        # Download Bonjour SDK from community mirror
-        # Note: Official Apple SDK requires developer account registration
-        $bonjourUrl = "https://github.com/nelsonjchen/mDNSResponder/releases/download/v2019.05.08.1/bonjoursdksetup.exe"
+        # Download Bonjour SDK
+        # Note: The original nelsonjchen mirror is no longer available (404)
+        # Using a fallback approach with multiple sources
+        
         $bonjourInstaller = "$env:TEMP\bonjoursdksetup.exe"
         $expectedHash = "F76D3E563914645F6BB28C32D9BB5FDE1BFF13AD51D54D64B3C9B3A68F5C9BD0"
         
-        Invoke-WebRequest -Uri $bonjourUrl -OutFile $bonjourInstaller
+        # Try multiple download sources
+        $urls = @(
+          "https://github.com/Borega/UxPlay/releases/download/bonjour-sdk/bonjoursdksetup.exe",
+          "https://github.com/nelsonjchen/mDNSResponder/releases/download/v2019.05.08.1/bonjoursdksetup.exe"
+        )
+        
+        $downloaded = $false
+        foreach ($url in $urls) {
+          Write-Host "Attempting download from: $url"
+          try {
+            Invoke-WebRequest -Uri $url -OutFile $bonjourInstaller -ErrorAction Stop
+            if (Test-Path $bonjourInstaller) {
+              Write-Host "Downloaded successfully from $url"
+              $downloaded = $true
+              break
+            }
+          }
+          catch {
+            Write-Host "Failed to download from $url : $_"
+            continue
+          }
+        }
+        
+        if (-not $downloaded) {
+          Write-Error @"
+        Failed to download Bonjour SDK from all sources.
+        
+        To fix this issue:
+        1. Download Bonjour SDK from Apple: https://developer.apple.com/download/all/?q=Bonjour%20SDK%20for%20Windows
+        2. Upload bonjoursdksetup.exe to this repository's releases with tag 'bonjour-sdk'
+        3. Or provide an alternative download URL
+        "@
+          exit 1
+        }
         
         # Verify hash for security
         $actualHash = (Get-FileHash -Path $bonjourInstaller -Algorithm SHA256).Hash
