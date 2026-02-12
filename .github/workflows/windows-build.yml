@@ -1,0 +1,120 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    permissions:
+      contents: read
+    
+    defaults:
+      run:
+        shell: msys2 {0}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    # Note: egor-tensin/setup-mingw is included as requested, though MSYS2 also provides MinGW toolchain
+    - name: Set up MinGW
+      uses: egor-tensin/setup-mingw@v3
+      with:
+        platform: x64
+    
+    - name: Set up MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: UCRT64
+        update: true
+        install: >-
+          mingw-w64-ucrt-x86_64-cmake
+          mingw-w64-ucrt-x86_64-gcc
+          mingw-w64-ucrt-x86_64-ninja
+          mingw-w64-ucrt-x86_64-libplist
+          mingw-w64-ucrt-x86_64-gstreamer
+          mingw-w64-ucrt-x86_64-gst-plugins-base
+          mingw-w64-ucrt-x86_64-gst-libav
+          mingw-w64-ucrt-x86_64-gst-plugins-good
+          mingw-w64-ucrt-x86_64-gst-plugins-bad
+    
+    - name: Download and setup Bonjour SDK
+      shell: pwsh
+      run: |
+        # Download Bonjour SDK
+        # Note: The original nelsonjchen mirror is no longer available (404)
+        # Using a fallback approach with multiple sources
+        
+        $bonjourInstaller = "$env:TEMP\bonjoursdksetup.exe"
+        $expectedHash = "F76D3E563914645F6BB28C32D9BB5FDE1BFF13AD51D54D64B3C9B3A68F5C9BD0"
+        
+        # Try multiple download sources
+        $urls = @(
+          "https://github.com/Borega/UxPlay/releases/download/bonjour-sdk/bonjoursdksetup.exe",
+          "https://github.com/nelsonjchen/mDNSResponder/releases/download/v2019.05.08.1/bonjoursdksetup.exe"
+        )
+        
+        $downloaded = $false
+        foreach ($url in $urls) {
+          Write-Host "Attempting download from: $url"
+          try {
+            Invoke-WebRequest -Uri $url -OutFile $bonjourInstaller -ErrorAction Stop
+            if (Test-Path $bonjourInstaller) {
+              Write-Host "Downloaded successfully from $url"
+              $downloaded = $true
+              break
+            }
+          }
+          catch {
+            Write-Host "Failed to download from $url : $_"
+            continue
+          }
+        }
+        
+        if (-not $downloaded) {
+          $errorMsg = "Failed to download Bonjour SDK from all sources.`n`n"
+          $errorMsg += "To fix this issue:`n"
+          $errorMsg += "1. Download Bonjour SDK from Apple: https://developer.apple.com/download/all/?q=Bonjour%20SDK%20for%20Windows`n"
+          $errorMsg += "2. Upload bonjoursdksetup.exe to this repository's releases with tag 'bonjour-sdk'`n"
+          $errorMsg += "3. Or provide an alternative download URL"
+          Write-Error $errorMsg
+          exit 1
+        }
+        
+        # Verify hash for security
+        $actualHash = (Get-FileHash -Path $bonjourInstaller -Algorithm SHA256).Hash
+        if ($actualHash -ne $expectedHash) {
+          Write-Error "Hash mismatch! Expected: $expectedHash, Got: $actualHash"
+          exit 1
+        }
+        
+        # Install Bonjour SDK silently
+        Start-Process -FilePath $bonjourInstaller -ArgumentList "/quiet" -Wait
+        
+        # Verify installation
+        if (Test-Path "C:\Program Files\Bonjour SDK") {
+          Write-Host "Bonjour SDK installed successfully"
+        } else {
+          Write-Error "Bonjour SDK installation failed"
+          exit 1
+        }
+    
+    - name: Build UxPlay
+      run: |
+        mkdir build
+        cd build
+        # Explicitly specify Ninja generator and ensure Bonjour SDK is found
+        cmake -G Ninja ..
+        ninja
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: uxplay-windows-x64
+        path: build/uxplay.exe
