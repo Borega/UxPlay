@@ -19,6 +19,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
     
+    # Note: egor-tensin/setup-mingw is included as requested, though MSYS2 also provides MinGW toolchain
     - name: Set up MinGW
       uses: egor-tensin/setup-mingw@v3
       with:
@@ -43,10 +44,20 @@ jobs:
     - name: Download and setup Bonjour SDK
       shell: pwsh
       run: |
-        # Download Bonjour SDK
+        # Download Bonjour SDK from community mirror
+        # Note: Official Apple SDK requires developer account registration
         $bonjourUrl = "https://github.com/nelsonjchen/mDNSResponder/releases/download/v2019.05.08.1/bonjoursdksetup.exe"
         $bonjourInstaller = "$env:TEMP\bonjoursdksetup.exe"
+        $expectedHash = "F76D3E563914645F6BB28C32D9BB5FDE1BFF13AD51D54D64B3C9B3A68F5C9BD0"
+        
         Invoke-WebRequest -Uri $bonjourUrl -OutFile $bonjourInstaller
+        
+        # Verify hash for security
+        $actualHash = (Get-FileHash -Path $bonjourInstaller -Algorithm SHA256).Hash
+        if ($actualHash -ne $expectedHash) {
+          Write-Error "Hash mismatch! Expected: $expectedHash, Got: $actualHash"
+          exit 1
+        }
         
         # Install Bonjour SDK silently
         Start-Process -FilePath $bonjourInstaller -ArgumentList "/quiet" -Wait
@@ -63,7 +74,8 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake ..
+        # Explicitly specify Ninja generator and ensure Bonjour SDK is found
+        cmake -G Ninja ..
         ninja
     
     - name: Upload artifact
