@@ -78,14 +78,12 @@ jobs:
         }
         
         if (-not $downloaded) {
-          Write-Error @"
-        Failed to download Bonjour SDK from all sources.
-        
-        To fix this issue:
-        1. Download Bonjour SDK from Apple: https://developer.apple.com/download/all/?q=Bonjour%20SDK%20for%20Windows
-        2. Upload bonjoursdksetup.exe to this repository's releases with tag 'bonjour-sdk'
-        3. Or provide an alternative download URL
-        "@
+          $errorMsg = "Failed to download Bonjour SDK from all sources.`n`n"
+          $errorMsg += "To fix this issue:`n"
+          $errorMsg += "1. Download Bonjour SDK from Apple: https://developer.apple.com/download/all/?q=Bonjour%20SDK%20for%20Windows`n"
+          $errorMsg += "2. Upload bonjoursdksetup.exe to this repository's releases with tag 'bonjour-sdk'`n"
+          $errorMsg += "3. Or provide an alternative download URL"
+          Write-Error $errorMsg
           exit 1
         }
         
