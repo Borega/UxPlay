@@ -22,12 +22,6 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    # Note: egor-tensin/setup-mingw is included as requested, though MSYS2 also provides MinGW toolchain
-    - name: Set up MinGW
-      uses: egor-tensin/setup-mingw@v3
-      with:
-        platform: x64
-    
     - name: Set up MSYS2
       uses: msys2/setup-msys2@v2
       with:
